@@ -43,3 +43,7 @@ venv.bak/
 # Project logs and local credentials
 *.log
 .colab/
+creds.txt
+*creds*
+secrets*
+*.secret
