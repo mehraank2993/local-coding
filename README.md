@@ -1,92 +1,50 @@
-# Local Coding Agent - Development Environment
+# Local Coding Agent
 
-This repository hosts the controller and development environment for the **Local Coding Agent** project.
+An autonomous coding agent system operated from a local development environment, powered by remote GPU compute and local LLM backends (Ollama / Qwen2.5-Coder on Google Colab).
+
+---
+
+## Overview
+
+The **Local Coding Agent** project separates the development/controller surface from heavy model execution:
+- **Local Controller**: Windows + Antigravity IDE managing task orchestration, codebase modifications, and Git version control.
+- **Compute Plane**: Google Colab GPU runtimes provisioned on-demand via the Colab CLI (WSL2), hosting Ollama and open-weights coding models.
+
+For all environment installation, WSL2 configuration, and Colab CLI setup details, refer to the **[Setup Guide](file:///d:/local-coding/SETUP.md)**.
+
+---
 
 ## Architecture
 
 ```text
-Windows Host
-└── Antigravity (IDE)
-    └── D:\local-coding (Local Git Repository)
-        └── WSL2 / Colab CLI (Linux Execution Environment)
-            ▼
-        Google Colab VM
-            ├── GPU (T4 / A100)
-            ├── Ollama
-            ├── Qwen2.5-Coder
-            └── Coding Agent
+Windows Host (Antigravity IDE)
+    └── Local Git Repository (d:\local-coding)
+            └── WSL2 / Colab CLI
+                    ▼
+            Google Colab GPU VM
+                ├── Tesla T4 / A100 GPU
+                ├── Ollama Server
+                ├── Qwen2.5-Coder
+                └── Autonomous Agent Engine
 ```
 
 ---
 
-## Infrastructure Milestone: WSL2 → Colab CLI → T4 GPU
+## Development Guidelines & Rules
 
-The local machine has no discrete GPU and acts strictly as the controller. Because `google-colab-cli` requires POSIX terminal support (`termios`) and native Windows support is still upstream work-in-progress, **WSL2** is the designated host for the Colab CLI.
+1. **Setup Documentation**: All setup instructions, environment dependencies, and runtime configurations must reside in [`SETUP.md`](file:///d:/local-coding/SETUP.md). Do not clutter this main README with installation steps.
+2. **Security & Credential Scanning**: 
+   - No credentials, tokens, or API keys (`creds.txt`, `.env`, OAuth tokens) may ever be committed or pushed.
+   - All commits and pushes are scanned by [`scripts/scan_secrets.py`](file:///d:/local-coding/scripts/scan_secrets.py).
+3. **No Heavy Premature Dependencies**: Avoid adding unneeded framework abstractions (no LangChain, LangGraph, Docker, MCP, FastAPI, RAG, DBs, frontend). Keep the agent lean and purpose-built.
 
-Before building any agent logic or execution abstractions, complete this 4-step infrastructure milestone to prove the raw remote execution path.
+---
 
-### Step 1: Install WSL2 on Windows Host
-Open PowerShell as **Administrator**:
-```powershell
-wsl --install
-```
-Restart Windows when prompted. Once rebooted, verify:
-```powershell
-wsl --status
-wsl -l -v
-```
-*(Ensure Ubuntu or your target distribution is running under WSL version 2).*
+## Quick Reference
 
-### Step 2: Set Up WSL2 Environment
-Inside your WSL terminal (e.g., Ubuntu):
-```bash
-sudo apt update && sudo apt install -y git python3 python3-pip python3-venv curl
-```
-*(Use Python 3.11 or 3.12 inside WSL to ensure maximum stability and compatibility).*
-
-### Step 3: Install Colab CLI via `uv` in WSL
-Install Astral's `uv`:
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.bashrc
-```
-
-Install `google-colab-cli` via `uv tool`:
-```bash
-uv tool install google-colab-cli
-```
-
-Verify installation and inspect supported authentication / flags:
-```bash
-colab version
-colab --help
-colab auth --help
-```
-
-### Step 4: Validate Raw Remote GPU Execution
-From your repository root inside WSL (`/mnt/d/local-coding`), run:
-```bash
-colab run --gpu T4 gpu_test.py
-```
-
-`gpu_test.py` validates remote CUDA availability and device reporting:
-```python
-import torch
-
-print("CUDA available:", torch.cuda.is_available())
-if torch.cuda.is_available():
-    print("GPU:", torch.cuda.get_device_name(0))
-```
-
-#### Status: VERIFIED & PASSED
-```text
-[colab] Creating session 'run-5baaac'...
-[colab] Session READY (run-5baaac). Executing gpu_test.py...
-CUDA available: True
-GPU: Tesla T4
-[colab] Stopping session 'run-5baaac'...
-[colab] Session terminated.
-```
-
-> [!NOTE]
-> The raw remote execution milestone (`WSL2 -> Colab CLI -> T4 GPU -> Python script`) is complete and validated. We are now ready to begin Phase 1.
+| Resource | Description |
+| :--- | :--- |
+| **[`SETUP.md`](file:///d:/local-coding/SETUP.md)** | Infrastructure setup, WSL2 configuration, and Colab CLI guide |
+| **[`verify_env.py`](file:///d:/local-coding/verify_env.py)** | Script to verify Git, Python, WSL2, Ollama, and Colab CLI |
+| **[`gpu_test.py`](file:///d:/local-coding/gpu_test.py)** | Remote Colab GPU validation script |
+| **[`scripts/scan_secrets.py`](file:///d:/local-coding/scripts/scan_secrets.py)** | Pre-commit and pre-push secret scanning tool |
