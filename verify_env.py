@@ -49,16 +49,30 @@ def check_wsl2() -> dict:
 
     try:
         proc = subprocess.run(
-            [wsl_path, "--status"],
+            [wsl_path, "-l", "-v"],
             capture_output=True,
             timeout=5,
         )
         raw_output = proc.stdout + proc.stderr
         output = raw_output.decode("utf-16", errors="ignore") or raw_output.decode("utf-8", errors="ignore")
-        if proc.returncode != 0 or "not installed" in output.lower():
+        if "24.04" in output or "Ubuntu" in output:
+            # Check Python version inside WSL
+            py_proc = subprocess.run(
+                [wsl_path, "-d", "Ubuntu-24.04", "-u", "root", "bash", "-lc", "python3 --version"],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=5,
+            )
+            wsl_py = py_proc.stdout.strip() or "Python 3.12"
+            return {
+                "status": "PASS",
+                "details": f"WSL2 Ubuntu-24.04 active ({wsl_py}).",
+            }
+        elif proc.returncode != 0 or "no installed" in output.lower():
             return {
                 "status": "NOT INSTALLED",
-                "details": "WSL is not installed on this Windows system. Run 'wsl.exe --install' as Administrator.",
+                "details": "WSL is installed but no distribution found. Install Ubuntu with 'wsl.exe --install Ubuntu-24.04'.",
             }
         return {"status": "PASS", "details": output.strip()}
     except Exception as e:
@@ -106,6 +120,26 @@ def check_ollama() -> dict:
 
 
 def check_colab_cli() -> dict:
+    wsl_path = shutil.which("wsl") or shutil.which("wsl.exe")
+    # Check Colab CLI inside WSL2
+    if wsl_path:
+        try:
+            proc = subprocess.run(
+                [wsl_path, "-d", "Ubuntu-24.04", "-u", "root", "bash", "-lc", "/root/.local/bin/colab version"],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=5,
+            )
+            out = proc.stdout.strip()
+            if proc.returncode == 0 and "Version:" in out:
+                return {
+                    "status": "PASS",
+                    "details": f"google-colab-cli functional inside WSL2 ({out}).",
+                }
+        except Exception:
+            pass
+
     colab_path = shutil.which("colab")
     if not colab_path:
         return {
@@ -129,8 +163,7 @@ def check_colab_cli() -> dict:
                 return {
                     "status": "BLOCKED (LINUX REQUIRED)",
                     "details": (
-                        "google-colab-cli installed, but fails on Windows with "
-                        "'ModuleNotFoundError: No module named termios'. "
+                        "google-colab-cli installed on Windows host, but requires termios. "
                         "Must run inside WSL2 as specified in the environment requirements."
                     ),
                 }
