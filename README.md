@@ -4,58 +4,79 @@ This repository hosts the controller and development environment for the **Local
 
 ## Architecture
 
-The environment is structured as a split controller/remote-execution model:
-
 ```text
-Antigravity (IDE)
-    ↓
-Local Git repository (Windows / Controller)
-    ↓
-Colab CLI (WSL2 Linux Environment)
-    ↓
-Colab GPU runtime (Remote Execution)
-    ↓
-Ollama (GPU-accelerated models)
-    ↓
-coding agent
+Windows Host
+└── Antigravity (IDE)
+    └── D:\local-coding (Local Git Repository)
+        └── WSL2 / Colab CLI (Linux Execution Environment)
+            ▼
+        Google Colab VM
+            ├── GPU (T4 / A100)
+            ├── Ollama
+            ├── Qwen2.5-Coder
+            └── Coding Agent
 ```
-
-## Component Status Checklist
-
-| Component | Target Version / Role | Status | Notes |
-| :--- | :--- | :--- | :--- |
-| **Git** | Distributed Version Control | **WORKING** | `v2.51.2`, repository initialized on branch `main` |
-| **Python** | 3.11+ (Host Controller) | **WORKING** | `Python 3.13.7` (64-bit) installed |
-| **WSL2** | Linux Subsystem for Tooling | **NOT INSTALLED** | Windows Subsystem for Linux is not yet installed on the host |
-| **Ollama** | Model Engine (Colab GPU) | **NOT READY** | Python client `ollama 0.6.1` is installed locally; Ollama engine will run remotely on Colab GPU |
-| **Google Colab CLI** | Remote Compute Orchestration | **BLOCKED (NEEDS WSL2)** | `google-colab-cli 0.7.4` is installed, but requires POSIX (`termios`). Must execute inside WSL2 |
 
 ---
 
-## Environment Verification
+## Infrastructure Milestone: WSL2 → Colab CLI → T4 GPU
 
-Run the verification checklist at any time:
+The local machine has no discrete GPU and acts strictly as the controller. Because `google-colab-cli` requires POSIX terminal support (`termios`) and native Windows support is still upstream work-in-progress, **WSL2** is the designated host for the Colab CLI.
 
+Before building any agent logic or execution abstractions, complete this 4-step infrastructure milestone to prove the raw remote execution path.
+
+### Step 1: Install WSL2 on Windows Host
+Open PowerShell as **Administrator**:
 ```powershell
-python verify_env.py
+wsl --install
+```
+Restart Windows when prompted. Once rebooted, verify:
+```powershell
+wsl --status
+wsl -l -v
+```
+*(Ensure Ubuntu or your target distribution is running under WSL version 2).*
+
+### Step 2: Set Up WSL2 Environment
+Inside your WSL terminal (e.g., Ubuntu):
+```bash
+sudo apt update && sudo apt install -y git python3 python3-pip python3-venv curl
+```
+*(Use Python 3.11 or 3.12 inside WSL to ensure maximum stability and compatibility).*
+
+### Step 3: Install Colab CLI via `uv` in WSL
+Install Astral's `uv`:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc
 ```
 
-## Required Actions to Complete Environment Setup
+Install `google-colab-cli` via `uv tool`:
+```bash
+uv tool install google-colab-cli
+```
 
-1. **Install WSL2 on Windows Host**:
-   Open PowerShell as **Administrator** and run:
-   ```powershell
-   wsl --install
-   ```
-   Reboot the system when prompted.
+Verify installation and inspect supported authentication / flags:
+```bash
+colab version
+colab --help
+colab auth --help
+```
 
-2. **Set up Google Colab CLI in WSL2**:
-   Once WSL2 is running (e.g. Ubuntu):
-   ```bash
-   pip install google-colab-cli
-   colab login
-   ```
+### Step 4: Validate Raw Remote GPU Execution
+From your repository root inside WSL (`/mnt/d/local-coding`), run:
+```bash
+colab run --gpu T4 gpu_test.py
+```
 
-3. **Connect to Colab GPU Runtime & Ollama**:
-   - Provision Colab GPU instance via Colab CLI.
-   - Run and expose Ollama within the Colab GPU environment.
+`gpu_test.py` validates remote CUDA availability and device reporting:
+```python
+import torch
+
+print("CUDA available:", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("GPU:", torch.cuda.get_device_name(0))
+```
+
+> [!NOTE]
+> **No Premature Abstractions**: Do not build a custom `ColabExecutor` wrapper yet. First prove the raw CLI pathway (`colab run --gpu T4`). Once raw execution is validated, we proceed to Phase 1.
